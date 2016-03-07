@@ -1,0 +1,39 @@
+{
+  "name": "sendy-ws-relay",
+  "version": "1.0.0",
+  "description": "[sendy](https://github.com/tradle/sendy) websockets relay",
+  "main": "index.js",
+  "scripts": {
+    "test": "node test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tradle/sendy-ws-relay"
+  },
+  "keywords": [
+    "tradle",
+    "websockets",
+    "relay"
+  ],
+  "author": "Mark Vayngrib <mark.vayngrib@lablz.com> (http://github.com/mvayngrib)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tradle/sendy-ws-relay/issues"
+  },
+  "homepage": "https://github.com/tradle/sendy-ws-relay",
+  "dependencies": {
+    "debug": "^2.2.0",
+    "object.omit": "^2.0.0",
+    "protocol-buffers": "^3.1.6",
+    "q": "^1.4.1",
+    "sendy-protobufs": "^1.0.0",
+    "socket.io": "^1.4.4",
+    "typeforce": "^1.6.1"
+  },
+  "devDependencies": {
+    "@tradle/otr": "^0.2.15",
+    "@tradle/utils": "^1.2.5",
+    "@tradle/ws-client": "^1.2.0",
+    "tape": "^4.4.0"
+  }
+}
