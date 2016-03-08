@@ -45,7 +45,10 @@ module.exports = Server
 
 Server.prototype._onconnection = function (socket) {
   var self = this
-  var handle
+  var query = socket.request._query
+  var handle = query.from
+  if (handle) this._registerSocket(handle, socket)
+
   socket.on('error', function (err) {
     debug('disconnecting, socket for client ' + handle + ' experienced an error', err)
     socket.disconnect()
@@ -68,9 +71,7 @@ Server.prototype._onconnection = function (socket) {
 
     if (!handle && msg.from) {
       handle = msg.from
-      debug('registered ' + handle)
-      self._sockets[handle] = socket
-      self.emit('connect', handle)
+      self._registerSocket(handle, socket)
     }
 
     debug('got message from ' + handle + ', to ' + msg.to)
@@ -89,6 +90,12 @@ Server.prototype._onconnection = function (socket) {
 
     toSocket.emit('message', msg)
   })
+}
+
+Server.prototype._registerSocket = function (handle, socket) {
+  debug('registered ' + handle)
+  this._sockets[handle] = socket
+  this.emit('connect', handle)
 }
 
 Server.prototype.getConnectedClients = function () {
