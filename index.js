@@ -58,8 +58,9 @@ Server.prototype._onconnection = function (socket) {
     if (!handle) return
 
     debug(handle + ' disconnected')
-    self.emit('disconnect', handle)
+    handle = null
     delete self._sockets[handle]
+    self.emit('disconnect', handle)
   })
 
   socket.on('message', function (msg) {
