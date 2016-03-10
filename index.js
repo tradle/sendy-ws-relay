@@ -80,7 +80,9 @@ Server.prototype._onconnection = function (socket) {
 
     var to = msg.to
     var toSocket = self._sockets[to]
-    if (!toSocket) return
+    if (!toSocket) {
+      return socket.emit('404', to)
+    }
 
     msg = WSPacket.encode({
       from: handle,
