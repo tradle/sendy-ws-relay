@@ -49,21 +49,27 @@ Server.prototype._onconnection = function (socket) {
   var handle = query.from
   if (handle) this._registerSocket(handle, socket)
 
-  socket.on('error', function (err) {
+  socket.on('error', onerror)
+  socket.once('disconnect', ondisconnect)
+  socket.on('message', onmessage)
+
+  function onerror (err) {
     debug('disconnecting, socket for client ' + handle + ' experienced an error', err)
     socket.disconnect()
-  })
+  }
 
-  socket.once('disconnect', function () {
+  function ondisconnect () {
     if (!handle) return
 
     debug(handle + ' disconnected')
     handle = null
     delete self._sockets[handle]
     self.emit('disconnect', handle)
-  })
+    socket.removeListener('error', onerror)
+    socket.removeListener('message', onmessage)
+  }
 
-  socket.on('message', function (msg) {
+  function onmessage (msg) {
     try {
       msg = WSPacket.decode(msg)
     } catch (err) {
@@ -85,6 +91,11 @@ Server.prototype._onconnection = function (socket) {
       return socket.emit('404', to)
     }
 
+    if (!toSocket.connected) {
+      delete self._sockets[to]
+      return
+    }
+
     msg = WSPacket.encode({
       from: handle,
       to: to,
@@ -92,7 +103,7 @@ Server.prototype._onconnection = function (socket) {
     })
 
     toSocket.emit('message', msg)
-  })
+  }
 }
 
 Server.prototype._registerSocket = function (handle, socket) {
