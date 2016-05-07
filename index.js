@@ -1,13 +1,15 @@
 
 var EventEmitter = require('events').EventEmitter
 var util = require('util')
+var parseURL = require('url').parse
 var debug = require('debug')('websocket-relay')
 var protobuf = require('protocol-buffers')
-var WSPacket = protobuf(require('sendy-protobufs').ws).Packet
+var WSPacket = require('sendy-protobufs').ws.Packet
 var http = require('http')
 var typeforce = require('typeforce')
 var omit = require('object.omit')
-var io = require('socket.io')
+var WebSocketServer = require('ws').Server
+// var io = require('socket.io')
 
 function Server (opts) {
   var self = this
@@ -34,10 +36,14 @@ function Server (opts) {
     this._server.listen(opts.port)
   }
 
-  this._io = io(this._server, { path: opts.path || '/' })
-  this._io.on('connection', function (socket) {
-    self._onconnection(socket)
-  })
+  this._wss = new WebSocketServer({ server: this._server })
+
+  this._wss.on('connection', this._onconnection.bind(this))
+
+  // this._io = io(this._server, { path: opts.path || '/' })
+  // this._io.on('connection', function (socket) {
+  //   self._onconnection(socket)
+  // })
 }
 
 util.inherits(Server, EventEmitter)
@@ -45,12 +51,12 @@ module.exports = Server
 
 Server.prototype._onconnection = function (socket) {
   var self = this
-  var query = socket.request._query
-  var handle = query.from
+  var query = parseURL(socket.upgradeReq.url).query
+  var handle = query && query.from
   if (handle) this._registerSocket(handle, socket)
 
   socket.on('error', onerror)
-  socket.once('disconnect', ondisconnect)
+  socket.once('close', ondisconnect)
   socket.on('message', onmessage)
 
   function onerror (err) {
@@ -73,7 +79,14 @@ Server.prototype._onconnection = function (socket) {
     try {
       msg = WSPacket.decode(msg)
     } catch (err) {
-      return socket.emit('error', { message: 'invalid message', data: msg })
+      return socket.send(JSON.stringify({
+        error: 'invalid message',
+        badPacket: msg
+      }))
+    }
+
+    if (msg.error) {
+      return debug('received error message: ' + msg.error)
     }
 
     if (!handle && msg.from) {
@@ -81,28 +94,33 @@ Server.prototype._onconnection = function (socket) {
       self._registerSocket(handle, socket)
     }
 
-    debug('got message from ' + handle + ', to ' + msg.to)
+    debug(`got message from ${handle}, to ${msg.to}`)
 
     if (!msg.data) return
 
     var to = msg.to
     var toSocket = self._sockets[to]
     if (!toSocket) {
-      return socket.emit('404', to)
+      return socket.send(JSON.stringify({
+        error: 'recipient not found',
+        badPacket: msg
+      }))
     }
 
-    if (!toSocket.connected) {
-      delete self._sockets[to]
-      return
-    }
+    // if (!toSocket.connected) {
+    //   delete self._sockets[to]
+    //   return
+    // }
 
-    msg = WSPacket.encode({
+    send(toSocket, {
       from: handle,
       to: to,
       data: msg.data
     })
+  }
 
-    toSocket.emit('message', msg)
+  function send (socket, msg) {
+    socket.send(WSPacket.encode(msg))
   }
 }
 
