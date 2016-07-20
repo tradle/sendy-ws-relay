@@ -89,10 +89,13 @@ Server.prototype._onconnection = function (socket) {
       return debug('received error message: ' + msg.error)
     }
 
-    if (!handle && msg.from) {
-      handle = msg.from
-      self._registerSocket(handle, socket)
-    }
+    if (!handle && msg.from) {
+      handle = msg.from
+    }
+
+    if (!self._sockets[handle]) {
+      self._registerSocket(handle, socket)
+    }
 
     debug(`got message from ${handle}, to ${msg.to}`)
 
