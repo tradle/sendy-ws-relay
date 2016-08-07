@@ -47,7 +47,7 @@ Server.prototype._onconnection = function (socket) {
   var self = this
   var query = socket.request._query
   var handle = query.from
-  if (handle) this._registerSocket(handle, socket)
+  if (handle) this._registerSocket(query, socket)
 
   socket.on('error', onerror)
   socket.once('disconnect', ondisconnect)
@@ -80,23 +80,34 @@ Server.prototype._onconnection = function (socket) {
       handle = msg.from
     }
 
-    if (!self._sockets[handle]) {
-      self._registerSocket(handle, socket)
-    }
+    self._registerSocket({
+      from: handle,
+      device: msg.fromDevice
+    }, socket)
 
     debug('got message from ' + handle + ', to ' + msg.to)
 
     if (!msg.data) return
 
     var to = msg.to
-    var toSocket = self._sockets[to]
-    if (!toSocket) {
-      return socket.emit('404', to)
+    var toSockets = self._sockets[to]
+    if (toSockets) {
+      // just in case cleanup
+      for (var deviceID in toSockets) {
+        var s = toSockets[deviceID]
+        if (!s.connected) {
+          delete toSockets[deviceID]
+        }
+      }
+
+      if (!Object.keys(toSockets).length) {
+        delete self._sockets[to]
+        toSockets = null
+      }
     }
 
-    if (!toSocket.connected) {
-      delete self._sockets[to]
-      return
+    if (!toSockets) {
+      return socket.emit('404', to)
     }
 
     msg = WSPacket.encode({
@@ -105,14 +116,23 @@ Server.prototype._onconnection = function (socket) {
       data: msg.data
     })
 
-    toSocket.emit('message', msg)
+    for (var deviceID in toSockets) {
+      var s = toSockets[deviceID]
+      s.emit('message', msg)
+    }
   }
 }
 
-Server.prototype._registerSocket = function (handle, socket) {
+Server.prototype._registerSocket = function (query, socket) {
+  const handle = query.from
+  const device = query.device || ''
   debug('registered ' + handle)
-  this._sockets[handle] = socket
-  this.emit('connect', handle)
+  const devices = this._sockets[handle] = this._sockets[handle] || {}
+
+  if (!devices[device]) {
+    devices[device] = socket
+    this.emit('connect', handle)
+  }
 }
 
 Server.prototype.getConnectedClients = function () {
@@ -130,8 +150,10 @@ Server.prototype.destroy = function (cb) {
   debug('destroying')
 
   for (var handle in this._sockets) {
-    var s = this._sockets[handle]
-    s.disconnect()
+    var devices = this._sockets[handle]
+    for (var deviceID in devices) {
+      devices[deviceID].disconnect()
+    }
     // s.removeAllListeners()
   }
 
