@@ -47,7 +47,8 @@ Server.prototype._onconnection = function (socket) {
   var self = this
   var query = socket.request._query
   var handle = query.from
-  if (handle) this._registerSocket(query, socket)
+  var pubKey = query.pubKey
+  this._registerSocket(query, socket)
 
   socket.on('error', onerror)
   socket.once('disconnect', ondisconnect)
@@ -59,11 +60,15 @@ Server.prototype._onconnection = function (socket) {
   }
 
   function ondisconnect () {
-    if (!handle) return
+    if (self._destroyed || !handle) return
 
     debug(handle + ' disconnected')
+    try {
+      delete self._sockets[handle][pubKey]
+    } catch (err) {
+    }
+
     handle = null
-    delete self._sockets[handle]
     self.emit('disconnect', handle)
     socket.removeListener('error', onerror)
     socket.removeListener('message', onmessage)
@@ -82,10 +87,10 @@ Server.prototype._onconnection = function (socket) {
 
     self._registerSocket({
       from: handle,
-      device: msg.fromDevice
+      pubKey: msg.pubKey
     }, socket)
 
-    debug('got message from ' + handle + ', to ' + msg.to)
+    debug('got message from ' + handle + ' to ' + msg.to + ' with length ' + msg.data.length)
 
     if (!msg.data) return
 
@@ -93,10 +98,10 @@ Server.prototype._onconnection = function (socket) {
     var toSockets = self._sockets[to]
     if (toSockets) {
       // just in case cleanup
-      for (var deviceID in toSockets) {
-        var s = toSockets[deviceID]
+      for (var pubKey in toSockets) {
+        var s = toSockets[pubKey]
         if (!s.connected) {
-          delete toSockets[deviceID]
+          delete toSockets[pubKey]
         }
       }
 
@@ -116,8 +121,8 @@ Server.prototype._onconnection = function (socket) {
       data: msg.data
     })
 
-    for (var deviceID in toSockets) {
-      var s = toSockets[deviceID]
+    for (var pubKey in toSockets) {
+      var s = toSockets[pubKey]
       s.emit('message', msg)
     }
   }
@@ -125,14 +130,18 @@ Server.prototype._onconnection = function (socket) {
 
 Server.prototype._registerSocket = function (query, socket) {
   const handle = query.from
-  const device = query.device || ''
-  debug('registered ' + handle)
-  const devices = this._sockets[handle] = this._sockets[handle] || {}
+  const pubKey = query.pubKey || ''
+  const socketsByPubKey = this._sockets[handle] = this._sockets[handle] || {}
 
-  if (!devices[device]) {
-    devices[device] = socket
-    this.emit('connect', handle)
+  if (socketsByPubKey[pubKey]) return
+
+  for (var pk in socketsByPubKey) {
+    if (socketsByPubKey[pk] === socket) return
   }
+
+  debug('registered ' + handle)
+  socketsByPubKey[pubKey] = socket
+  this.emit('connect', handle)
 }
 
 Server.prototype.getConnectedClients = function () {
@@ -150,9 +159,9 @@ Server.prototype.destroy = function (cb) {
   debug('destroying')
 
   for (var handle in this._sockets) {
-    var devices = this._sockets[handle]
-    for (var deviceID in devices) {
-      devices[deviceID].disconnect()
+    var socketsByPubKey = this._sockets[handle]
+    for (var pubKey in socketsByPubKey) {
+      socketsByPubKey[pubKey].disconnect()
     }
     // s.removeAllListeners()
   }
