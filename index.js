@@ -47,7 +47,12 @@ Server.prototype._onconnection = function (socket) {
   var self = this
   var query = socket.request._query
   var handle = query.from
-  var pubKey = query.pubKey
+  if (!handle) {
+    debug('disconnecting socket without `from` query param in connection request url')
+    return socket.disconnect()
+  }
+
+  var pubKey = query.pubKey || ''
   this._registerSocket(query, socket)
 
   socket.on('error', onerror)
@@ -69,7 +74,7 @@ Server.prototype._onconnection = function (socket) {
     }
 
     handle = null
-    self.emit('disconnect', handle)
+    self.emit('disconnect', handle, pubKey)
     socket.removeListener('error', onerror)
     socket.removeListener('message', onmessage)
   }
@@ -86,6 +91,7 @@ Server.prototype._onconnection = function (socket) {
     }
 
     self._registerSocket({
+      // TODO: `from` is not needed in every message if it's supplied in connection url
       from: handle,
       pubKey: msg.pubKey
     }, socket)
