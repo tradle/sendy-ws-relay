@@ -48,16 +48,23 @@ Server.prototype._onconnection = function (socket) {
   var query = socket.request._query
   var handle = query.from
   if (!handle) {
-    debug('disconnecting socket without `from` query param in connection request url')
+    debug('disconnecting socket without `handle` query param in connection request url')
     return socket.disconnect()
   }
 
-  var pubKey = query.pubKey || ''
-  this._registerSocket(query, socket)
-
+  register()
   socket.on('error', onerror)
   socket.once('disconnect', ondisconnect)
   socket.on('message', onmessage)
+
+  function register () {
+    // TODO: handshake to weed out pretenders
+    if (self._sockets[handle]) return
+
+    debug('registered ' + handle)
+    self._sockets[handle] = socket
+    self.emit('connect', handle)
+  }
 
   function onerror (err) {
     debug('disconnecting, socket for client ' + handle + ' experienced an error', err)
@@ -69,14 +76,19 @@ Server.prototype._onconnection = function (socket) {
 
     debug(handle + ' disconnected')
     try {
-      delete self._sockets[handle][pubKey]
+      delete self._sockets[handle]
     } catch (err) {
     }
 
     handle = null
-    self.emit('disconnect', handle, pubKey)
+    self.emit('disconnect', handle)
     socket.removeListener('error', onerror)
     socket.removeListener('message', onmessage)
+    socket.once('connect', function () {
+      // is this even possible?
+      debug('socket reconnected!')
+      self._onconnection(socket)
+    })
   }
 
   function onmessage (msg) {
@@ -86,68 +98,22 @@ Server.prototype._onconnection = function (socket) {
       return socket.emit('error', { message: 'invalid message', data: msg })
     }
 
-    if (!handle && msg.from) {
-      handle = msg.from
-    }
-
-    self._registerSocket({
-      // TODO: `from` is not needed in every message if it's supplied in connection url
-      from: handle,
-      pubKey: msg.pubKey
-    }, socket)
-
     debug('got message from ' + handle + ' to ' + msg.to + ' with length ' + msg.data.length)
 
     if (!msg.data) return
 
     var to = msg.to
-    var toSockets = self._sockets[to]
-    if (toSockets) {
-      // just in case cleanup
-      for (var pubKey in toSockets) {
-        var s = toSockets[pubKey]
-        if (!s.connected) {
-          delete toSockets[pubKey]
-        }
-      }
-
-      if (!Object.keys(toSockets).length) {
-        delete self._sockets[to]
-        toSockets = null
-      }
-    }
-
-    if (!toSockets) {
-      return socket.emit('404', to)
-    }
+    var toSocket = self._sockets[to]
+    if (!toSocket) return socket.emit('404', to)
 
     msg = WSPacket.encode({
       from: handle,
-      to: to,
+//       to: to,
       data: msg.data
     })
 
-    for (var pubKey in toSockets) {
-      var s = toSockets[pubKey]
-      s.emit('message', msg)
-    }
+    toSocket.emit('message', msg)
   }
-}
-
-Server.prototype._registerSocket = function (query, socket) {
-  const handle = query.from
-  const pubKey = query.pubKey || ''
-  const socketsByPubKey = this._sockets[handle] = this._sockets[handle] || {}
-
-  if (socketsByPubKey[pubKey]) return
-
-  for (var pk in socketsByPubKey) {
-    if (socketsByPubKey[pk] === socket) return
-  }
-
-  debug('registered ' + handle)
-  socketsByPubKey[pubKey] = socket
-  this.emit('connect', handle)
 }
 
 Server.prototype.getConnectedClients = function () {
@@ -165,10 +131,7 @@ Server.prototype.destroy = function (cb) {
   debug('destroying')
 
   for (var handle in this._sockets) {
-    var socketsByPubKey = this._sockets[handle]
-    for (var pubKey in socketsByPubKey) {
-      socketsByPubKey[pubKey].disconnect()
-    }
+    this._sockets[handle].disconnect()
     // s.removeAllListeners()
   }
 
