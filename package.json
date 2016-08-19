@@ -1,6 +1,6 @@
 {
   "name": "sendy-ws-relay",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "[sendy](https://github.com/tradle/sendy) websockets relay",
   "main": "index.js",
   "scripts": {
