@@ -53,8 +53,8 @@ Server.prototype._onconnection = function (socket) {
   }
 
   register()
-  socket.on('error', onerror)
   socket.once('disconnect', ondisconnect)
+  socket.on('error', onerror)
   socket.on('message', onmessage)
 
   function register () {
@@ -108,7 +108,6 @@ Server.prototype._onconnection = function (socket) {
 
     msg = WSPacket.encode({
       from: handle,
-//       to: to,
       data: msg.data
     })
 
@@ -125,7 +124,7 @@ Server.prototype.hasClient = function (handle) {
 }
 
 Server.prototype.destroy = function (cb) {
-  if (this._destroyed) return
+  if (this._destroyed) return process.nextTick(cb)
 
   this._destroyed = true
   debug('destroying')
