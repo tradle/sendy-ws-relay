@@ -130,7 +130,7 @@ Server.prototype.destroy = function (cb) {
   debug('destroying')
 
   for (var handle in this._sockets) {
-    this._sockets[handle].disconnect()
+    this._sockets[handle].disconnect(true)
     // s.removeAllListeners()
   }
 
