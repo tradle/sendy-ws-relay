@@ -98,6 +98,8 @@ Server.prototype._onconnection = function (socket) {
       return socket.emit('error', { message: 'invalid message', data: msg })
     }
 
+    // in case the socket disconnected and reconnected
+    register()
     debug('got message from ' + handle + ' to ' + msg.to + ' with length ' + msg.data.length)
 
     if (!msg.data) return
