@@ -107,6 +107,9 @@ Server.prototype._onconnection = function (socket) {
     var to = msg.to
     var toSocket = self._sockets[to]
     if (!toSocket) return socket.emit('404', to)
+    if (socket === toSocket) {
+      return debug('refusing to send message to same socket that sent it')
+    }
 
     msg = WSPacket.encode({
       from: handle,
