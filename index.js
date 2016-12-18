@@ -7,6 +7,7 @@ var WSPacket = protobuf(require('sendy-protobufs').ws).Packet
 var http = require('http')
 var typeforce = require('typeforce')
 var omit = require('object.omit')
+var extend = require('xtend')
 var io = require('socket.io')
 
 function Server (opts) {
@@ -34,7 +35,8 @@ function Server (opts) {
     this._server.listen(opts.port)
   }
 
-  this._io = io(this._server, { path: opts.path || '/' })
+  const ioOpts = extend(omit(opts, ['path', 'server', 'port']), { path: opts.path || '/' })
+  this._io = io(this._server, ioOpts)
   this._io.on('connection', function (socket) {
     self._onconnection(socket)
   })
